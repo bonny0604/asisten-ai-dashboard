@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kas Digital — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0D1826;
+    --panel:#132238;
+    --panel2:#16263B;
+    --panel3:#1C3350;
+    --paper:#F1E9D8;
+    --paper-line:#d9cdae;
+    --brass:#C9A227;
+    --brass-soft:#E4C15E;
+    --green:#4FAE79;
+    --red:#D4685C;
+    --text:#EAF1F5;
+    --muted:#8FA3B8;
+    --border:#233b57;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;-webkit-font-smoothing:antialiased;}
+  .display{font-family:'Fraunces',serif;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  a{color:inherit;}
+
+  .wrap{max-width:1240px;margin:0 auto;padding:28px 22px 80px;}
+
+  /* HEADER */
+  header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:28px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:14px;}
+  .seal{
+    width:46px;height:46px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, var(--brass-soft), var(--brass) 70%);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Fraunces',serif;font-weight:700;color:#25200a;font-size:18px;
+    box-shadow:0 0 0 3px rgba(201,162,39,0.18);
+  }
+  .brand h1{font-size:22px;margin:0;font-weight:600;letter-spacing:0.3px;}
+  .brand p{margin:2px 0 0;font-size:12.5px;color:var(--muted);}
+  .status-row{display:flex;align-items:center;gap:12px;}
+  .pill{display:flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--border);padding:7px 13px;border-radius:999px;font-size:12.5px;color:var(--muted);}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);}
+  .dot.off{background:var(--red);box-shadow:0 0 8px var(--red);}
+  .btn{background:var(--panel3);border:1px solid var(--border);color:var(--text);padding:9px 16px;border-radius:9px;font-size:13px;cursor:pointer;font-family:inherit;transition:.15s;}
+  .btn:hover{border-color:var(--brass);}
+  .btn.primary{background:var(--brass);color:#25200a;border-color:var(--brass);font-weight:600;}
+  .btn.primary:hover{background:var(--brass-soft);}
+
+  /* CONFIG PANEL */
+  .config{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:24px;display:none;}
+  .config.open{display:block;}
+  .config h3{margin:0 0 4px;font-size:14px;}
+  .config p{margin:0 0 14px;font-size:12.5px;color:var(--muted);line-height:1.5;}
+  .config-row{display:flex;gap:10px;flex-wrap:wrap;}
+  .config input{flex:1;min-width:220px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;}
+  .config input:focus{outline:none;border-color:var(--brass);}
+
+  /* HERO */
+  .hero{
+    background:linear-gradient(135deg, var(--panel3), var(--panel2));
+    border:1px solid var(--border);
+    border-radius:20px;
+    padding:32px 34px;
+    margin-bottom:22px;
+    display:grid;
+    grid-template-columns:1.3fr 1fr;
+    gap:28px;
+    position:relative;
+    overflow:hidden;
+  }
+  .hero::before{
+    content:"";position:absolute;top:-60px;right:-60px;width:220px;height:220px;
+    background:radial-gradient(circle, rgba(201,162,39,0.16), transparent 70%);
+  }
+  .hero-eyebrow{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--brass-soft);margin:0 0 8px;font-weight:600;}
+  .hero-saldo{font-size:52px;font-weight:700;margin:0;line-height:1;}
+  .hero-saldo small{font-size:22px;font-weight:400;color:var(--muted);margin-right:6px;}
+  .hero-sub{display:flex;gap:26px;margin-top:20px;flex-wrap:wrap;}
+  .hero-stat .label{font-size:12px;color:var(--muted);margin-bottom:4px;}
+  .hero-stat .val{font-size:19px;font-weight:600;}
+  .hero-stat .val.in{color:var(--green);}
+  .hero-stat .val.out{color:var(--red);}
+
+  /* RECEIPT TAPE - signature element */
+  .receipt-wrap{position:relative;}
+  .receipt{
+    background:var(--paper);color:#2b2412;border-radius:4px;
+    padding:16px 18px 20px;
+    max-height:260px;overflow-y:auto;
+    box-shadow:0 10px 30px rgba(0,0,0,0.35);
+    position:relative;
+  }
+  .receipt::before, .receipt::after{
+    content:"";position:absolute;left:0;right:0;height:10px;
+    background-image:radial-gradient(circle, var(--bg) 5px, transparent 5.5px);
+    background-size:16px 16px;background-repeat:repeat-x;
+  }
+  .receipt::before{top:-5px;background-position:0 -5px;}
+  .receipt::after{bottom:-5px;background-position:0 5px;}
+  .receipt h4{margin:0 0 10px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:2px;text-align:center;text-transform:uppercase;border-bottom:1px dashed var(--paper-line);padding-bottom:10px;}
+  .rline{display:flex;justify-content:space-between;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;padding:6px 0;border-bottom:1px dashed var(--paper-line);}
+  .rline:last-child{border-bottom:none;}
+  .rline .desc{color:#5a4f30;}
+  .rline .amt.in{color:#2f7a4f;font-weight:600;}
+  .rline .amt.out{color:#a03d33;font-weight:600;}
+  .receipt-empty{font-size:12px;color:#6b5f3d;text-align:center;padding:20px 0;font-family:'IBM Plex Mono',monospace;}
+
+  /* GRID */
+  .grid{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;margin-bottom:20px;}
+  .card{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;}
+  .card h3{margin:0 0 4px;font-size:15px;}
+  .card .sub{font-size:12px;color:var(--muted);margin:0 0 16px;}
+  .chart-box{position:relative;height:230px;}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:6px;}
+  .stat-card{background:var(--panel3);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
+  .stat-card .n{font-size:20px;font-weight:600;}
+  .stat-card .l{font-size:11.5px;color:var(--muted);margin-top:3px;}
+
+  /* ANALYSIS */
+  .analysis{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:24px 26px;}
+  .analysis-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+  .analysis-head h3{margin:0;font-size:16px;}
+  .insight-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:16px;}
+  .insight{background:var(--panel3);border-left:3px solid var(--brass);border-radius:8px;padding:13px 15px;font-size:13px;line-height:1.5;}
+  .insight b{color:var(--brass-soft);}
+  .ai-narrative{background:var(--bg);border:1px dashed var(--border);border-radius:10px;padding:16px 18px;font-size:13.5px;line-height:1.6;color:var(--text);}
+  .ai-narrative .tag{font-size:11px;color:var(--brass-soft);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;display:block;}
+
+  footer{text-align:center;color:var(--muted);font-size:12px;margin-top:36px;}
+
+  @media(max-width:860px){
+    .hero{grid-template-columns:1fr;}
+    .grid{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="seal">Rp</div>
+      <div>
+        <h1>Kas Digital</h1>
+        <p>Dashboard keuangan — tersinkron dari bot Telegram</p>
+      </div>
+    </div>
+    <div class="status-row">
+      <div class="pill"><span class="dot off" id="statusDot"></span><span id="statusText">Belum terhubung</span></div>
+      <button class="btn" id="toggleConfig">Atur Koneksi</button>
+      <button class="btn primary" id="refreshBtn">Segarkan</button>
+    </div>
+  </header>
+
+  <div class="config" id="configPanel">
+    <h3>Hubungkan Sumber Data</h3>
+    <p><b>Opsi A (disarankan):</b> gunakan Web API dari workflow n8n (real-time, tidak perlu Sheet publik).<br>
+       <b>Opsi B:</b> baca langsung dari Google Sheet yang dipublikasikan.</p>
+    <div class="config-row">
+      <input type="text" id="webhookUrlInput" placeholder="Webhook API URL (contoh: https://n8n-anda.app/webhook/finance-api)">
+      <button class="btn primary" id="connectWebhookBtn">Hubungkan via API</button>
+    </div>
+    <p style="margin-top:14px;">Atau, sumber Sheet publik (fallback):</p>
+    <div class="config-row">
+      <input type="text" id="sheetIdInput" placeholder="Sheet ID (dari URL: /d/SHEET_ID/edit)">
+      <input type="text" id="sheetNameInput" placeholder="Nama sheet (contoh: Sheet 1)" value="Sheet 1">
+      <button class="btn" id="connectBtn">Hubungkan via Sheet</button>
+    </div>
+  </div>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div>
+      <p class="hero-eyebrow">Saldo Saat Ini</p>
+      <p class="hero-saldo display"><small>Rp</small><span id="saldoValue">0</span></p>
+      <div class="hero-sub">
+        <div class="hero-stat"><div class="label">Total Pemasukan</div><div class="val in mono" id="totalMasuk">Rp 0</div></div>
+        <div class="hero-stat"><div class="label">Total Pengeluaran</div><div class="val out mono" id="totalKeluar">Rp 0</div></div>
+        <div class="hero-stat"><div class="label">Jumlah Transaksi</div><div class="val mono" id="totalTx">0</div></div>
+      </div>
+    </div>
+    <div class="receipt-wrap">
+      <div class="receipt" id="receiptTape">
+        <h4>Pita Transaksi Terbaru</h4>
+        <div class="receipt-empty">Belum ada data — hubungkan Sheet Anda</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="grid">
+    <div class="card">
+      <h3>Tren Kas Bulanan</h3>
+      <p class="sub">Perbandingan uang masuk vs keluar per bulan</p>
+      <div class="chart-box"><canvas id="trendChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Kategori Pengeluaran</h3>
+      <p class="sub">Distribusi berdasarkan kategori</p>
+      <div class="chart-box"><canvas id="categoryChart"></canvas></div>
+      <div class="stat-grid" id="topCategoryStats"></div>
+    </div>
+  </div>
+
+  <!-- ANALYSIS -->
+  <div class="analysis">
+    <div class="analysis-head">
+      <h3>📊 Analisis Keuangan</h3>
+      <span class="pill" style="border-color:var(--brass);color:var(--brass-soft);">Diperbarui otomatis</span>
+    </div>
+    <div class="insight-list" id="insightList"></div>
+    <div class="ai-narrative">
+      <span class="tag">Ringkasan</span>
+      <span id="narrativeText">Hubungkan Sheet untuk melihat analisis otomatis berdasarkan data transaksi Anda — rasio simpanan, kategori boros, dan tren pengeluaran.</span>
+    </div>
+  </div>
+
+  <footer>Kas Digital — data tersinkron langsung dari Google Sheets. Tidak ada data yang disimpan di server pihak ketiga.</footer>
+</div>
+
+<script>
+let trendChart, categoryChart;
+const fmtRp = n => 'Rp ' + Math.round(n).toLocaleString('id-ID');
+
+function loadConfig(){
+  return {
+    source: localStorage.getItem('kd_source') || '',
+    webhookUrl: localStorage.getItem('kd_webhook_url') || '',
+    sheetId: localStorage.getItem('kd_sheet_id') || '',
+    sheetName: localStorage.getItem('kd_sheet_name') || 'Sheet 1'
+  };
+}
+function saveWebhookConfig(url){
+  localStorage.setItem('kd_source', 'webhook');
+  localStorage.setItem('kd_webhook_url', url);
+}
+function saveSheetConfig(id, name){
+  localStorage.setItem('kd_source', 'sheet');
+  localStorage.setItem('kd_sheet_id', id);
+  localStorage.setItem('kd_sheet_name', name);
+}
+
+document.getElementById('toggleConfig').addEventListener('click', () => {
+  document.getElementById('configPanel').classList.toggle('open');
+});
+
+document.getElementById('connectWebhookBtn').addEventListener('click', () => {
+  const url = document.getElementById('webhookUrlInput').value.trim().replace(/\/$/, '');
+  if(!url){ alert('Isi Webhook API URL terlebih dahulu.'); return; }
+  saveWebhookConfig(url);
+  fetchData();
+});
+
+document.getElementById('connectBtn').addEventListener('click', () => {
+  const id = document.getElementById('sheetIdInput').value.trim();
+  const name = document.getElementById('sheetNameInput').value.trim() || 'Sheet 1';
+  if(!id){ alert('Isi Sheet ID terlebih dahulu.'); return; }
+  saveSheetConfig(id, name);
+  fetchData();
+});
+
+document.getElementById('refreshBtn').addEventListener('click', fetchData);
+
+async function fetchData(){
+  const cfg = loadConfig();
+  const dot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+
+  if(!cfg.source){
+    renderAll(sampleData());
+    dot.className = 'dot off';
+    statusText.textContent = 'Mode contoh (belum terhubung)';
+    return;
+  }
+
+  if(cfg.source === 'webhook'){
+    try{
+      statusText.textContent = 'Memuat dari Web API...';
+      const res = await fetch(`${cfg.webhookUrl}?endpoint=recent&limit=9999`);
+      const json = await res.json();
+      const rows = (json.transactions || []).map(t => ({
+        tanggal: t.date || (t.timestamp || '').slice(0,10),
+        jenis: t.type === 'Masuk' ? 'Masuk' : 'Keluar',
+        kategori: t.category || 'Lainnya',
+        nominal: Number(String(t.amount || 0).replace(/[^0-9.-]/g,'')) || 0,
+        deskripsi: (t.description || '') + (t.vendor ? ' — ' + t.vendor : '')
+      }));
+      renderAll(rows);
+      dot.className = 'dot';
+      statusText.textContent = `Terhubung (API) — ${rows.length} transaksi`;
+    }catch(err){
+      console.error(err);
+      dot.className = 'dot off';
+      statusText.textContent = 'Gagal memuat dari Web API. Cek URL & CORS.';
+    }
+    return;
+  }
+
+  // source === 'sheet'
+  const url = `https://docs.google.com/spreadsheets/d/${cfg.sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(cfg.sheetName)}`;
+  try{
+    statusText.textContent = 'Memuat dari Sheet...';
+    const res = await fetch(url);
+    const text = await res.text();
+    const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    const cols = json.table.cols.map(c => c.label || c.id);
+    const rows = json.table.rows.map(r => {
+      const obj = {};
+      r.c.forEach((cell, i) => { obj[cols[i]] = cell ? (cell.f || cell.v) : ''; });
+      return obj;
+    });
+    renderAll(normalizeRows(rows));
+    dot.className = 'dot';
+    statusText.textContent = `Terhubung (Sheet) — ${rows.length} baris`;
+  }catch(err){
+    console.error(err);
+    dot.className = 'dot off';
+    statusText.textContent = 'Gagal memuat. Cek akses Sheet & Sheet ID.';
+  }
+}
+
+function normalizeRows(rows){
+  return rows.filter(r => r.amount || r.Nominal).map(r => ({
+    tanggal: r.date || r.Tanggal || (r.timestamp || '').slice(0,10),
+    jenis: (r.type || r.Jenis) === 'Masuk' ? 'Masuk' : 'Keluar',
+    kategori: r.category || r.Kategori || 'Lainnya',
+    nominal: Number(String(r.amount || r.Nominal).replace(/[^0-9.-]/g,'')) || 0,
+    deskripsi: (r.description || r.Deskripsi || '') + (r.vendor ? ' — ' + r.vendor : '')
+  }));
+}
+
+function sampleData(){
+  const cats = ['Bahan Baku','Operasional','Penjualan','Transport','Lain-lain'];
+  const out = [];
+  for(let i=0;i<24;i++){
+    const isIn = Math.random() > 0.55;
+    out.push({
+      tanggal: `2026-0${(i%6)+1}-${String((i%27)+1).padStart(2,'0')}`,
+      jenis: isIn ? 'Masuk' : 'Keluar',
+      kategori: cats[i % cats.length],
+      nominal: Math.round((isIn ? 150000+Math.random()*500000 : 20000+Math.random()*180000)),
+      deskripsi: isIn ? 'Penjualan harian' : 'Belanja ' + cats[i % cats.length]
+    });
+  }
+  return out;
+}
+
+function renderAll(data){
+  const masuk = data.filter(d=>d.jenis==='Masuk').reduce((a,b)=>a+b.nominal,0);
+  const keluar = data.filter(d=>d.jenis==='Keluar').reduce((a,b)=>a+b.nominal,0);
+  const saldo = masuk - keluar;
+
+  document.getElementById('saldoValue').textContent = Math.round(saldo).toLocaleString('id-ID');
+  document.getElementById('totalMasuk').textContent = fmtRp(masuk);
+  document.getElementById('totalKeluar').textContent = fmtRp(keluar);
+  document.getElementById('totalTx').textContent = data.length;
+
+  renderReceipt(data);
+  renderTrendChart(data);
+  renderCategoryChart(data);
+  renderInsights(data, masuk, keluar, saldo);
+}
+
+function renderReceipt(data){
+  const el = document.getElementById('receiptTape');
+  const last = [...data].slice(-12).reverse();
+  if(last.length === 0){
+    el.innerHTML = '<h4>Pita Transaksi Terbaru</h4><div class="receipt-empty">Belum ada data</div>';
+    return;
+  }
+  let html = '<h4>Pita Transaksi Terbaru</h4>';
+  for(const r of last){
+    html += `<div class="rline"><span class="desc">${r.tanggal} · ${r.kategori}</span><span class="amt ${r.jenis==='Masuk'?'in':'out'}">${r.jenis==='Masuk'?'+':'-'}${fmtRp(r.nominal)}</span></div>`;
+  }
+  el.innerHTML = html;
+}
+
+function renderTrendChart(data){
+  const byMonth = {};
+  data.forEach(r => {
+    const m = (r.tanggal || '').slice(0,7) || 'N/A';
+    byMonth[m] = byMonth[m] || {masuk:0, keluar:0};
+    if(r.jenis === 'Masuk') byMonth[m].masuk += r.nominal; else byMonth[m].keluar += r.nominal;
+  });
+  const labels = Object.keys(byMonth).sort();
+  const masukArr = labels.map(l => byMonth[l].masuk);
+  const keluarArr = labels.map(l => byMonth[l].keluar);
+
+  if(trendChart) trendChart.destroy();
+  trendChart = new Chart(document.getElementById('trendChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {label:'Masuk', data: masukArr, backgroundColor:'#4FAE79', borderRadius:5},
+        {label:'Keluar', data: keluarArr, backgroundColor:'#D4685C', borderRadius:5}
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#8FA3B8', font:{size:11}}}},
+      scales:{
+        x:{ticks:{color:'#8FA3B8', font:{size:10}}, grid:{color:'#233b57'}},
+        y:{ticks:{color:'#8FA3B8', font:{size:10}}, grid:{color:'#233b57'}}
+      }
+    }
+  });
+}
+
+function renderCategoryChart(data){
+  const byCat = {};
+  data.filter(r=>r.jenis==='Keluar').forEach(r => { byCat[r.kategori] = (byCat[r.kategori]||0) + r.nominal; });
+  const labels = Object.keys(byCat);
+  const values = Object.values(byCat);
+  const palette = ['#C9A227','#4FAE79','#D4685C','#5C8FD4','#B279D4','#D4A85C'];
+
+  if(categoryChart) categoryChart.destroy();
+  categoryChart = new Chart(document.getElementById('categoryChart'), {
+    type: 'doughnut',
+    data: { labels, datasets:[{data: values, backgroundColor: palette, borderColor:'#16263B', borderWidth:2}] },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom', labels:{color:'#8FA3B8', font:{size:10}, boxWidth:10}}}
+    }
+  });
+
+  const top = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,2);
+  document.getElementById('topCategoryStats').innerHTML = top.map(([k,v]) =>
+    `<div class="stat-card"><div class="n mono">${fmtRp(v)}</div><div class="l">${k}</div></div>`
+  ).join('');
+}
+
+function renderInsights(data, masuk, keluar, saldo){
+  const insights = [];
+  const savingsRate = masuk > 0 ? ((saldo/masuk)*100).toFixed(1) : 0;
+  insights.push(`<b>Rasio simpanan:</b> ${savingsRate}% dari pemasukan tersisa sebagai saldo.`);
+
+  const byCat = {};
+  data.filter(r=>r.jenis==='Keluar').forEach(r => { byCat[r.kategori] = (byCat[r.kategori]||0) + r.nominal; });
+  const topCat = Object.entries(byCat).sort((a,b)=>b[1]-a[1])[0];
+  if(topCat){
+    const pct = keluar > 0 ? ((topCat[1]/keluar)*100).toFixed(0) : 0;
+    insights.push(`<b>Kategori terbesar:</b> "${topCat[0]}" menyerap ${pct}% dari total pengeluaran.`);
+  }
+
+  if(saldo < 0){
+    insights.push(`<b>Perhatian:</b> pengeluaran melebihi pemasukan pada periode ini.`);
+  } else {
+    insights.push(`<b>Status:</b> arus kas positif, saldo bertambah ${fmtRp(saldo)}.`);
+  }
+
+  const avgTx = data.length ? (keluar / data.filter(r=>r.jenis==='Keluar').length || 0) : 0;
+  insights.push(`<b>Rata-rata transaksi keluar:</b> ${fmtRp(avgTx)} per transaksi.`);
+
+  document.getElementById('insightList').innerHTML = insights.map(i => `<div class="insight">${i}</div>`).join('');
+
+  let narrative;
+  if(saldo < 0){
+    narrative = `Pengeluaran saat ini lebih besar dari pemasukan. Coba tinjau kategori "${topCat?topCat[0]:'terbesar'}" karena menyumbang porsi terbesar dari total belanja. Pertimbangkan menunda pengeluaran non-esensial hingga arus kas kembali positif.`;
+  } else if(savingsRate < 15){
+    narrative = `Arus kas masih positif, namun rasio simpanan tergolong tipis (${savingsRate}%). Menyisihkan sebagian pemasukan sebagai dana cadangan akan membuat kondisi keuangan lebih tahan terhadap bulan-bulan sepi.`;
+  } else {
+    narrative = `Kondisi keuangan sehat dengan rasio simpanan ${savingsRate}%. Pertahankan pola ini, dan pertimbangkan mengalokasikan sebagian saldo untuk pengembangan usaha atau investasi.`;
+  }
+  document.getElementById('narrativeText').textContent = narrative;
+}
+
+// init
+(function init(){
+  const cfg = loadConfig();
+  if(cfg.source === 'webhook'){
+    document.getElementById('webhookUrlInput').value = cfg.webhookUrl;
+  } else if(cfg.source === 'sheet'){
+    document.getElementById('sheetIdInput').value = cfg.sheetId;
+    document.getElementById('sheetNameInput').value = cfg.sheetName;
+  }
+  fetchData();
+})();
+</script>
+</body>
+</html>
