@@ -134,6 +134,13 @@
   .ai-narrative{background:var(--bg);border:1px dashed var(--border);border-radius:10px;padding:16px 18px;font-size:13.5px;line-height:1.6;color:var(--text);}
   .ai-narrative .tag{font-size:11px;color:var(--brass-soft);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;display:block;}
 
+  /* TELEGRAM LOGIN */
+  .tg-login-box{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:16px;border-bottom:1px dashed var(--border);}
+  .tg-user{display:none;align-items:center;gap:10px;background:var(--panel3);border:1px solid var(--border);padding:7px 14px 7px 7px;border-radius:999px;font-size:13px;}
+  .tg-user.show{display:flex;}
+  .tg-user img{width:26px;height:26px;border-radius:50%;}
+  .tg-user .logout{color:var(--red);cursor:pointer;font-size:12px;margin-left:6px;text-decoration:underline;}
+
   footer{text-align:center;color:var(--muted);font-size:12px;margin-top:36px;}
 
   @media(max-width:860px){
@@ -162,7 +169,17 @@
 
   <div class="config" id="configPanel">
     <h3>Hubungkan Sumber Data</h3>
-    <p><b>Opsi A (disarankan):</b> gunakan Web API dari workflow n8n (real-time, tidak perlu Sheet publik).<br>
+
+    <div class="tg-login-box">
+      <div id="telegramLoginContainer"></div>
+      <div class="tg-user" id="tgUserBox">
+        <img id="tgUserPhoto" src="" alt="">
+        <span>Login sebagai <b id="tgUserName"></b></span>
+        <span class="logout" id="tgLogoutBtn">Keluar</span>
+      </div>
+    </div>
+
+    <p><b>Opsi A (disarankan):</b> login Telegram di atas untuk mengambil ID Anda otomatis, lalu isi Webhook API dari workflow n8n (real-time, tidak perlu Sheet publik).<br>
        <b>Opsi B:</b> baca langsung dari Google Sheet yang dipublikasikan.</p>
     <div class="config-row">
       <input type="text" id="webhookUrlInput" placeholder="Webhook API URL (contoh: https://n8n-anda.app/webhook/finance-api)">
@@ -235,7 +252,10 @@ function loadConfig(){
     source: localStorage.getItem('kd_source') || '',
     webhookUrl: localStorage.getItem('kd_webhook_url') || '',
     sheetId: localStorage.getItem('kd_sheet_id') || '',
-    sheetName: localStorage.getItem('kd_sheet_name') || 'Sheet 1'
+    sheetName: localStorage.getItem('kd_sheet_name') || 'Sheet 1',
+    telegramId: localStorage.getItem('kd_telegram_id') || '',
+    telegramName: localStorage.getItem('kd_telegram_name') || '',
+    telegramPhoto: localStorage.getItem('kd_telegram_photo') || ''
   };
 }
 function saveWebhookConfig(url){
@@ -247,6 +267,37 @@ function saveSheetConfig(id, name){
   localStorage.setItem('kd_sheet_id', id);
   localStorage.setItem('kd_sheet_name', name);
 }
+
+// ===== Telegram Login Widget =====
+// Dipanggil otomatis oleh script telegram-widget.js setelah user konfirmasi login
+function onTelegramAuth(user){
+  localStorage.setItem('kd_telegram_id', user.id);
+  localStorage.setItem('kd_telegram_name', user.first_name || user.username || 'Pengguna');
+  localStorage.setItem('kd_telegram_photo', user.photo_url || '');
+  renderTelegramUser();
+  fetchData();
+}
+function renderTelegramUser(){
+  const cfg = loadConfig();
+  const box = document.getElementById('tgUserBox');
+  const loginContainer = document.getElementById('telegramLoginContainer');
+  if(cfg.telegramId){
+    box.classList.add('show');
+    loginContainer.style.display = 'none';
+    document.getElementById('tgUserName').textContent = cfg.telegramName;
+    document.getElementById('tgUserPhoto').src = cfg.telegramPhoto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(cfg.telegramName);
+  } else {
+    box.classList.remove('show');
+    loginContainer.style.display = 'block';
+  }
+}
+document.getElementById('tgLogoutBtn').addEventListener('click', () => {
+  localStorage.removeItem('kd_telegram_id');
+  localStorage.removeItem('kd_telegram_name');
+  localStorage.removeItem('kd_telegram_photo');
+  renderTelegramUser();
+  fetchData();
+});
 
 document.getElementById('toggleConfig').addEventListener('click', () => {
   document.getElementById('configPanel').classList.toggle('open');
@@ -282,11 +333,22 @@ async function fetchData(){
   }
 
   if(cfg.source === 'webhook'){
+    if(!cfg.telegramId){
+      renderAll(sampleData());
+      dot.className = 'dot off';
+      statusText.textContent = 'Login Telegram dulu untuk melihat data Anda';
+      return;
+    }
     try{
       statusText.textContent = 'Memuat dari Web API...';
-      const res = await fetch(`${cfg.webhookUrl}?endpoint=recent&limit=9999`);
+      const res = await fetch(`${cfg.webhookUrl}?endpoint=recent&limit=9999&user_id=${encodeURIComponent(cfg.telegramId)}`);
       const json = await res.json();
-      const rows = (json.transactions || []).map(t => ({
+      if(json.success === false){
+        dot.className = 'dot off';
+        statusText.textContent = json.error || 'API menolak permintaan.';
+        return;
+      }
+      const rows = (json.transactions || json.data || []).map(t => ({
         tanggal: t.date || (t.timestamp || '').slice(0,10),
         jenis: t.type === 'Masuk' ? 'Masuk' : 'Keluar',
         kategori: t.category || 'Lainnya',
@@ -295,7 +357,7 @@ async function fetchData(){
       }));
       renderAll(rows);
       dot.className = 'dot';
-      statusText.textContent = `Terhubung (API) — ${rows.length} transaksi`;
+      statusText.textContent = `Terhubung sebagai ${cfg.telegramName} — ${rows.length} transaksi`;
     }catch(err){
       console.error(err);
       dot.className = 'dot off';
@@ -482,8 +544,30 @@ function renderInsights(data, masuk, keluar, saldo){
     document.getElementById('sheetIdInput').value = cfg.sheetId;
     document.getElementById('sheetNameInput').value = cfg.sheetName;
   }
+  renderTelegramUser();
   fetchData();
 })();
+</script>
+
+<!-- Telegram Login Widget: harus dimuat setelah #telegramLoginContainer ada di DOM -->
+<script async src="https://telegram.org/js/telegram-widget.js?22"
+  data-telegram-login="Volaafin_bot"
+  data-size="large"
+  data-radius="8"
+  data-onauth="onTelegramAuth(user)"
+  data-request-access="write">
+</script>
+<script>
+  // Pindahkan widget bawaan (nempel di <body>) ke dalam container kita
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      const iframe = document.querySelector('iframe[src*="oauth.telegram.org"]');
+      const container = document.getElementById('telegramLoginContainer');
+      if(iframe && container && !container.contains(iframe)){
+        container.appendChild(iframe);
+      }
+    }, 700);
+  });
 </script>
 </body>
 </html>
