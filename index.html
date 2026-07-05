@@ -134,13 +134,6 @@
   .ai-narrative{background:var(--bg);border:1px dashed var(--border);border-radius:10px;padding:16px 18px;font-size:13.5px;line-height:1.6;color:var(--text);}
   .ai-narrative .tag{font-size:11px;color:var(--brass-soft);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;display:block;}
 
-  /* TELEGRAM LOGIN */
-  .tg-login-box{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:16px;border-bottom:1px dashed var(--border);}
-  .tg-user{display:none;align-items:center;gap:10px;background:var(--panel3);border:1px solid var(--border);padding:7px 14px 7px 7px;border-radius:999px;font-size:13px;}
-  .tg-user.show{display:flex;}
-  .tg-user img{width:26px;height:26px;border-radius:50%;}
-  .tg-user .logout{color:var(--red);cursor:pointer;font-size:12px;margin-left:6px;text-decoration:underline;}
-
   footer{text-align:center;color:var(--muted);font-size:12px;margin-top:36px;}
 
   @media(max-width:860px){
@@ -162,34 +155,17 @@
     </div>
     <div class="status-row">
       <div class="pill"><span class="dot off" id="statusDot"></span><span id="statusText">Belum terhubung</span></div>
-      <button class="btn" id="toggleConfig">Atur Koneksi</button>
+      <button class="btn" id="toggleConfig">Masuk</button>
       <button class="btn primary" id="refreshBtn">Segarkan</button>
     </div>
   </header>
 
   <div class="config" id="configPanel">
-    <h3>Hubungkan Sumber Data</h3>
-
-    <div class="tg-login-box">
-      <div id="telegramLoginContainer"></div>
-      <div class="tg-user" id="tgUserBox">
-        <img id="tgUserPhoto" src="" alt="">
-        <span>Login sebagai <b id="tgUserName"></b></span>
-        <span class="logout" id="tgLogoutBtn">Keluar</span>
-      </div>
-    </div>
-
-    <p><b>Opsi A (disarankan):</b> login Telegram di atas untuk mengambil ID Anda otomatis, lalu isi Webhook API dari workflow n8n (real-time, tidak perlu Sheet publik).<br>
-       <b>Opsi B:</b> baca langsung dari Google Sheet yang dipublikasikan.</p>
+    <h3>Masuk ke Dashboard</h3>
+    <p>Masukkan nomor HP yang sudah kamu hubungkan di bot Telegram (ketik <b>/menu</b> di bot, lalu tap tombol <b>"Bagikan Nomor HP"</b>). Tidak perlu Webhook URL atau Sheet ID lagi.</p>
     <div class="config-row">
-      <input type="text" id="webhookUrlInput" placeholder="Webhook API URL (contoh: https://n8n-anda.app/webhook/finance-api)">
-      <button class="btn primary" id="connectWebhookBtn">Hubungkan via API</button>
-    </div>
-    <p style="margin-top:14px;">Atau, sumber Sheet publik (fallback):</p>
-    <div class="config-row">
-      <input type="text" id="sheetIdInput" placeholder="Sheet ID (dari URL: /d/SHEET_ID/edit)">
-      <input type="text" id="sheetNameInput" placeholder="Nama sheet (contoh: Sheet 1)" value="Sheet 1">
-      <button class="btn" id="connectBtn">Hubungkan via Sheet</button>
+      <input type="text" id="phoneInput" placeholder="Nomor HP (contoh: 6281234567890)">
+      <button class="btn primary" id="loginBtn">Masuk</button>
     </div>
   </div>
 
@@ -240,163 +216,153 @@
     </div>
   </div>
 
+  <!-- BACKUP HISTORY -->
+  <div class="analysis" style="margin-top:20px;">
+    <div class="analysis-head">
+      <h3>🗄️ Riwayat Backup</h3>
+      <span class="pill" style="border-color:var(--brass);color:var(--brass-soft);">Otomatis tiap minggu</span>
+    </div>
+    <p class="sub" style="margin:-8px 0 14px;">Transaksi yang lebih tua dari 7 hari otomatis dibackup lalu dihapus dari data aktif. File backup bisa dilihat & diunduh di sini.</p>
+    <div id="backupTableWrap"><p class="sub">Masuk dengan nomor HP untuk melihat riwayat backup.</p></div>
+  </div>
+
   <footer>Kas Digital — data tersinkron langsung dari Google Sheets. Tidak ada data yang disimpan di server pihak ketiga.</footer>
 </div>
 
 <script>
+// TODO: ganti dengan URL webhook n8n kamu sendiri (tanpa trailing slash), contoh:
+// 'https://n8n-anda.app/webhook/finance-api'
+const API_BASE = 'https://ISI-URL-WEBHOOK-N8N-ANDA/webhook/finance-api';
+
 let trendChart, categoryChart;
 const fmtRp = n => 'Rp ' + Math.round(n).toLocaleString('id-ID');
 
-function loadConfig(){
+function loadSession(){
   return {
-    source: localStorage.getItem('kd_source') || '',
-    webhookUrl: localStorage.getItem('kd_webhook_url') || '',
-    sheetId: localStorage.getItem('kd_sheet_id') || '',
-    sheetName: localStorage.getItem('kd_sheet_name') || 'Sheet 1',
-    telegramId: localStorage.getItem('kd_telegram_id') || '',
-    telegramName: localStorage.getItem('kd_telegram_name') || '',
-    telegramPhoto: localStorage.getItem('kd_telegram_photo') || ''
+    userId: localStorage.getItem('kd_user_id') || '',
+    phone: localStorage.getItem('kd_phone') || ''
   };
 }
-function saveWebhookConfig(url){
-  localStorage.setItem('kd_source', 'webhook');
-  localStorage.setItem('kd_webhook_url', url);
+function saveSession(userId, phone){
+  localStorage.setItem('kd_user_id', userId);
+  localStorage.setItem('kd_phone', phone);
 }
-function saveSheetConfig(id, name){
-  localStorage.setItem('kd_source', 'sheet');
-  localStorage.setItem('kd_sheet_id', id);
-  localStorage.setItem('kd_sheet_name', name);
+function clearSession(){
+  localStorage.removeItem('kd_user_id');
+  localStorage.removeItem('kd_phone');
 }
-
-// ===== Telegram Login Widget =====
-// Dipanggil otomatis oleh script telegram-widget.js setelah user konfirmasi login
-function onTelegramAuth(user){
-  localStorage.setItem('kd_telegram_id', user.id);
-  localStorage.setItem('kd_telegram_name', user.first_name || user.username || 'Pengguna');
-  localStorage.setItem('kd_telegram_photo', user.photo_url || '');
-  renderTelegramUser();
-  fetchData();
+function updateLoginButton(){
+  const session = loadSession();
+  document.getElementById('toggleConfig').textContent = session.userId ? 'Ganti Nomor' : 'Masuk';
 }
-function renderTelegramUser(){
-  const cfg = loadConfig();
-  const box = document.getElementById('tgUserBox');
-  const loginContainer = document.getElementById('telegramLoginContainer');
-  if(cfg.telegramId){
-    box.classList.add('show');
-    loginContainer.style.display = 'none';
-    document.getElementById('tgUserName').textContent = cfg.telegramName;
-    document.getElementById('tgUserPhoto').src = cfg.telegramPhoto || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(cfg.telegramName);
-  } else {
-    box.classList.remove('show');
-    loginContainer.style.display = 'block';
-  }
-}
-document.getElementById('tgLogoutBtn').addEventListener('click', () => {
-  localStorage.removeItem('kd_telegram_id');
-  localStorage.removeItem('kd_telegram_name');
-  localStorage.removeItem('kd_telegram_photo');
-  renderTelegramUser();
-  fetchData();
-});
 
 document.getElementById('toggleConfig').addEventListener('click', () => {
   document.getElementById('configPanel').classList.toggle('open');
 });
 
-document.getElementById('connectWebhookBtn').addEventListener('click', () => {
-  const url = document.getElementById('webhookUrlInput').value.trim().replace(/\/$/, '');
-  if(!url){ alert('Isi Webhook API URL terlebih dahulu.'); return; }
-  saveWebhookConfig(url);
-  fetchData();
-});
+document.getElementById('loginBtn').addEventListener('click', loginWithPhone);
 
-document.getElementById('connectBtn').addEventListener('click', () => {
-  const id = document.getElementById('sheetIdInput').value.trim();
-  const name = document.getElementById('sheetNameInput').value.trim() || 'Sheet 1';
-  if(!id){ alert('Isi Sheet ID terlebih dahulu.'); return; }
-  saveSheetConfig(id, name);
-  fetchData();
-});
-
-document.getElementById('refreshBtn').addEventListener('click', fetchData);
-
-async function fetchData(){
-  const cfg = loadConfig();
+async function loginWithPhone(){
+  const phone = document.getElementById('phoneInput').value.trim().replace(/[^0-9+]/g, '');
   const dot = document.getElementById('statusDot');
   const statusText = document.getElementById('statusText');
-
-  if(!cfg.source){
-    renderAll(sampleData());
-    dot.className = 'dot off';
-    statusText.textContent = 'Mode contoh (belum terhubung)';
-    return;
-  }
-
-  if(cfg.source === 'webhook'){
-    if(!cfg.telegramId){
-      renderAll(sampleData());
+  if(!phone){ alert('Isi nomor HP terlebih dahulu.'); return; }
+  try{
+    statusText.textContent = 'Mencari akun...';
+    const res = await fetch(`${API_BASE}?endpoint=resolve_user&phone=${encodeURIComponent(phone)}`);
+    const json = await res.json();
+    if(!json.success){
       dot.className = 'dot off';
-      statusText.textContent = 'Login Telegram dulu untuk melihat data Anda';
+      statusText.textContent = json.error || 'Nomor tidak ditemukan.';
       return;
     }
-    try{
-      statusText.textContent = 'Memuat dari Web API...';
-      const res = await fetch(`${cfg.webhookUrl}?endpoint=recent&limit=9999&user_id=${encodeURIComponent(cfg.telegramId)}`);
-      const json = await res.json();
-      if(json.success === false){
-        dot.className = 'dot off';
-        statusText.textContent = json.error || 'API menolak permintaan.';
-        return;
-      }
-      const rows = (json.transactions || json.data || []).map(t => ({
-        tanggal: t.date || (t.timestamp || '').slice(0,10),
-        jenis: t.type === 'Masuk' ? 'Masuk' : 'Keluar',
-        kategori: t.category || 'Lainnya',
-        nominal: Number(String(t.amount || 0).replace(/[^0-9.-]/g,'')) || 0,
-        deskripsi: (t.description || '') + (t.vendor ? ' — ' + t.vendor : '')
-      }));
-      renderAll(rows);
-      dot.className = 'dot';
-      statusText.textContent = `Terhubung sebagai ${cfg.telegramName} — ${rows.length} transaksi`;
-    }catch(err){
-      console.error(err);
-      dot.className = 'dot off';
-      statusText.textContent = 'Gagal memuat dari Web API. Cek URL & CORS.';
-    }
-    return;
-  }
-
-  // source === 'sheet'
-  const url = `https://docs.google.com/spreadsheets/d/${cfg.sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(cfg.sheetName)}`;
-  try{
-    statusText.textContent = 'Memuat dari Sheet...';
-    const res = await fetch(url);
-    const text = await res.text();
-    const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1));
-    const cols = json.table.cols.map(c => c.label || c.id);
-    const rows = json.table.rows.map(r => {
-      const obj = {};
-      r.c.forEach((cell, i) => { obj[cols[i]] = cell ? (cell.f || cell.v) : ''; });
-      return obj;
-    });
-    renderAll(normalizeRows(rows));
-    dot.className = 'dot';
-    statusText.textContent = `Terhubung (Sheet) — ${rows.length} baris`;
+    saveSession(json.user_id, phone);
+    document.getElementById('configPanel').classList.remove('open');
+    updateLoginButton();
+    fetchData();
+    fetchBackups();
   }catch(err){
     console.error(err);
     dot.className = 'dot off';
-    statusText.textContent = 'Gagal memuat. Cek akses Sheet & Sheet ID.';
+    statusText.textContent = 'Gagal menghubungi server. Cek API_BASE & koneksi.';
   }
 }
 
-function normalizeRows(rows){
-  return rows.filter(r => r.amount || r.Nominal).map(r => ({
-    tanggal: r.date || r.Tanggal || (r.timestamp || '').slice(0,10),
-    jenis: (r.type || r.Jenis) === 'Masuk' ? 'Masuk' : 'Keluar',
-    kategori: r.category || r.Kategori || 'Lainnya',
-    nominal: Number(String(r.amount || r.Nominal).replace(/[^0-9.-]/g,'')) || 0,
-    deskripsi: (r.description || r.Deskripsi || '') + (r.vendor ? ' — ' + r.vendor : '')
-  }));
+document.getElementById('refreshBtn').addEventListener('click', () => { fetchData(); fetchBackups(); });
+
+async function fetchData(){
+  const session = loadSession();
+  const dot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+
+  if(!session.userId){
+    renderAll(sampleData());
+    dot.className = 'dot off';
+    statusText.textContent = 'Mode contoh — masukkan nomor HP untuk melihat data asli';
+    return;
+  }
+
+  try{
+    statusText.textContent = 'Memuat data...';
+    const res = await fetch(`${API_BASE}?endpoint=recent&user_id=${encodeURIComponent(session.userId)}&limit=9999`);
+    const json = await res.json();
+    if(!json.success){
+      dot.className = 'dot off';
+      statusText.textContent = json.error || 'Gagal memuat data.';
+      return;
+    }
+    const rows = (json.transactions || []).map(t => ({
+      tanggal: t.date || (t.timestamp || '').slice(0,10),
+      jenis: t.type === 'Masuk' ? 'Masuk' : 'Keluar',
+      kategori: t.category || 'Lainnya',
+      nominal: Number(String(t.amount || 0).replace(/[^0-9.-]/g,'')) || 0,
+      deskripsi: (t.description || '') + (t.vendor ? ' — ' + t.vendor : '')
+    }));
+    renderAll(rows);
+    dot.className = 'dot';
+    statusText.textContent = `Terhubung — ${session.phone} (${rows.length} transaksi)`;
+  }catch(err){
+    console.error(err);
+    dot.className = 'dot off';
+    statusText.textContent = 'Gagal memuat dari server. Cek API_BASE & koneksi.';
+  }
+}
+
+async function fetchBackups(){
+  const wrap = document.getElementById('backupTableWrap');
+  const session = loadSession();
+  if(!session.userId){
+    wrap.innerHTML = '<p class="sub">Masuk dengan nomor HP untuk melihat riwayat backup.</p>';
+    return;
+  }
+  try{
+    wrap.innerHTML = '<p class="sub">Memuat riwayat backup...</p>';
+    const res = await fetch(`${API_BASE}?endpoint=backups&user_id=${encodeURIComponent(session.userId)}`);
+    const json = await res.json();
+    const backups = json.backups || [];
+    if(!backups.length){
+      wrap.innerHTML = '<p class="sub">Belum ada backup — file akan muncul di sini setelah backup mingguan pertama berjalan.</p>';
+      return;
+    }
+    let html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">';
+    html += '<thead><tr style="text-align:left;color:var(--muted);"><th style="padding:8px 10px;">Periode</th><th style="padding:8px 10px;">Transaksi</th><th style="padding:8px 10px;">Tanggal Backup</th><th style="padding:8px 10px;"></th></tr></thead><tbody>';
+    backups.forEach(b => {
+      html += `<tr style="border-top:1px solid var(--border);">
+        <td style="padding:8px 10px;">${b.period_start || '-'} – ${b.period_end || '-'}</td>
+        <td style="padding:8px 10px;">${b.row_count || 0}</td>
+        <td style="padding:8px 10px;">${(b.created_at || '').slice(0,16).replace('T',' ')}</td>
+        <td style="padding:8px 10px;white-space:nowrap;">
+          <a href="${b.view_url}" target="_blank" rel="noopener" class="btn" style="padding:6px 10px;font-size:11.5px;text-decoration:none;">Lihat</a>
+          <a href="${b.download_url}" target="_blank" rel="noopener" class="btn" style="padding:6px 10px;font-size:11.5px;text-decoration:none;">Unduh</a>
+        </td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    wrap.innerHTML = html;
+  }catch(err){
+    console.error(err);
+    wrap.innerHTML = '<p class="sub">Gagal memuat riwayat backup.</p>';
+  }
 }
 
 function sampleData(){
@@ -537,37 +503,12 @@ function renderInsights(data, masuk, keluar, saldo){
 
 // init
 (function init(){
-  const cfg = loadConfig();
-  if(cfg.source === 'webhook'){
-    document.getElementById('webhookUrlInput').value = cfg.webhookUrl;
-  } else if(cfg.source === 'sheet'){
-    document.getElementById('sheetIdInput').value = cfg.sheetId;
-    document.getElementById('sheetNameInput').value = cfg.sheetName;
-  }
-  renderTelegramUser();
+  updateLoginButton();
+  const session = loadSession();
+  if(session.phone) document.getElementById('phoneInput').value = session.phone;
   fetchData();
+  fetchBackups();
 })();
-</script>
-
-<!-- Telegram Login Widget: harus dimuat setelah #telegramLoginContainer ada di DOM -->
-<script async src="https://telegram.org/js/telegram-widget.js?22"
-  data-telegram-login="Volaafin_bot"
-  data-size="large"
-  data-radius="8"
-  data-onauth="onTelegramAuth(user)"
-  data-request-access="write">
-</script>
-<script>
-  // Pindahkan widget bawaan (nempel di <body>) ke dalam container kita
-  window.addEventListener('load', () => {
-    setTimeout(() => {
-      const iframe = document.querySelector('iframe[src*="oauth.telegram.org"]');
-      const container = document.getElementById('telegramLoginContainer');
-      if(iframe && container && !container.contains(iframe)){
-        container.appendChild(iframe);
-      }
-    }, 700);
-  });
 </script>
 </body>
 </html>
