@@ -172,12 +172,12 @@
   <!-- HERO -->
   <div class="hero">
     <div>
-      <p class="hero-eyebrow">Saldo Saat Ini</p>
+      <p class="hero-eyebrow">Total Pengeluaran</p>
       <p class="hero-saldo display"><small>Rp</small><span id="saldoValue">0</span></p>
       <div class="hero-sub">
-        <div class="hero-stat"><div class="label">Total Pemasukan</div><div class="val in mono" id="totalMasuk">Rp 0</div></div>
-        <div class="hero-stat"><div class="label">Total Pengeluaran</div><div class="val out mono" id="totalKeluar">Rp 0</div></div>
+        <div class="hero-stat"><div class="label">Tempat Belanja Teratas</div><div class="val mono" id="topVendor">-</div></div>
         <div class="hero-stat"><div class="label">Jumlah Transaksi</div><div class="val mono" id="totalTx">0</div></div>
+        <div class="hero-stat"><div class="label">Rata-rata / Transaksi</div><div class="val mono" id="avgTx">Rp 0</div></div>
       </div>
     </div>
     <div class="receipt-wrap">
@@ -203,6 +203,13 @@
     </div>
   </div>
 
+  <!-- TOP VENDORS -->
+  <div class="card" style="margin-bottom:20px;">
+    <h3>📍 Tempat Belanja Teratas</h3>
+    <p class="sub">Vendor/toko dengan total pengeluaran terbesar</p>
+    <div id="vendorList" class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));"></div>
+  </div>
+
   <!-- ANALYSIS -->
   <div class="analysis">
     <div class="analysis-head">
@@ -212,7 +219,7 @@
     <div class="insight-list" id="insightList"></div>
     <div class="ai-narrative">
       <span class="tag">Ringkasan</span>
-      <span id="narrativeText">Hubungkan Sheet untuk melihat analisis otomatis berdasarkan data transaksi Anda — rasio simpanan, kategori boros, dan tren pengeluaran.</span>
+      <span id="narrativeText">Hubungkan Sheet untuk melihat analisis otomatis berdasarkan data transaksi Anda — kategori & tempat belanja paling boros, serta tren pengeluaran.</span>
     </div>
   </div>
 
@@ -313,10 +320,10 @@ async function fetchData(){
     }
     const rows = (json.transactions || []).map(t => ({
       tanggal: t.date || (t.timestamp || '').slice(0,10),
-      jenis: t.type === 'Masuk' ? 'Masuk' : 'Keluar',
+      tempat: t.vendor || 'Tidak diketahui',
       kategori: t.category || 'Lainnya',
       nominal: Number(String(t.amount || 0).replace(/[^0-9.-]/g,'')) || 0,
-      deskripsi: (t.description || '') + (t.vendor ? ' — ' + t.vendor : '')
+      deskripsi: t.description || ''
     }));
     renderAll(rows);
     dot.className = 'dot';
@@ -366,35 +373,52 @@ async function fetchBackups(){
 }
 
 function sampleData(){
-  const cats = ['Bahan Baku','Operasional','Penjualan','Transport','Lain-lain'];
+  const cats = ['Bahan Baku','Operasional','Transport','Kemasan','Lain-lain'];
+  const vendors = ['Pasar Induk','Indomaret','Toko Jaya','Warung Bu Tini','Gojek','Tokopedia'];
   const out = [];
   for(let i=0;i<24;i++){
-    const isIn = Math.random() > 0.55;
     out.push({
       tanggal: `2026-0${(i%6)+1}-${String((i%27)+1).padStart(2,'0')}`,
-      jenis: isIn ? 'Masuk' : 'Keluar',
+      tempat: vendors[i % vendors.length],
       kategori: cats[i % cats.length],
-      nominal: Math.round((isIn ? 150000+Math.random()*500000 : 20000+Math.random()*180000)),
-      deskripsi: isIn ? 'Penjualan harian' : 'Belanja ' + cats[i % cats.length]
+      nominal: Math.round(20000+Math.random()*180000),
+      deskripsi: 'Belanja ' + cats[i % cats.length]
     });
   }
   return out;
 }
 
 function renderAll(data){
-  const masuk = data.filter(d=>d.jenis==='Masuk').reduce((a,b)=>a+b.nominal,0);
-  const keluar = data.filter(d=>d.jenis==='Keluar').reduce((a,b)=>a+b.nominal,0);
-  const saldo = masuk - keluar;
+  const total = data.reduce((a,b)=>a+b.nominal,0);
+  const avg = data.length ? total / data.length : 0;
 
-  document.getElementById('saldoValue').textContent = Math.round(saldo).toLocaleString('id-ID');
-  document.getElementById('totalMasuk').textContent = fmtRp(masuk);
-  document.getElementById('totalKeluar').textContent = fmtRp(keluar);
+  const byVendor = {};
+  data.forEach(d => { const v = d.tempat || 'Tidak diketahui'; byVendor[v] = (byVendor[v]||0) + d.nominal; });
+  const topVendorEntry = Object.entries(byVendor).sort((a,b)=>b[1]-a[1])[0];
+
+  document.getElementById('saldoValue').textContent = Math.round(total).toLocaleString('id-ID');
+  document.getElementById('topVendor').textContent = topVendorEntry ? topVendorEntry[0] : '-';
   document.getElementById('totalTx').textContent = data.length;
+  document.getElementById('avgTx').textContent = fmtRp(avg);
 
   renderReceipt(data);
   renderTrendChart(data);
   renderCategoryChart(data);
-  renderInsights(data, masuk, keluar, saldo);
+  renderVendors(data, byVendor, total);
+  renderInsights(data, total, byVendor);
+}
+
+function renderVendors(data, byVendor, total){
+  const top = Object.entries(byVendor).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const el = document.getElementById('vendorList');
+  if(top.length === 0){
+    el.innerHTML = '<div class="receipt-empty" style="grid-column:1/-1;">Belum ada data tempat belanja</div>';
+    return;
+  }
+  el.innerHTML = top.map(([name, val]) => {
+    const pct = total > 0 ? Math.round(val/total*100) : 0;
+    return `<div class="stat-card"><div class="n mono">${fmtRp(val)}</div><div class="l">${name} · ${pct}%</div></div>`;
+  }).join('');
 }
 
 function renderReceipt(data){
@@ -406,7 +430,7 @@ function renderReceipt(data){
   }
   let html = '<h4>Pita Transaksi Terbaru</h4>';
   for(const r of last){
-    html += `<div class="rline"><span class="desc">${r.tanggal} · ${r.kategori}</span><span class="amt ${r.jenis==='Masuk'?'in':'out'}">${r.jenis==='Masuk'?'+':'-'}${fmtRp(r.nominal)}</span></div>`;
+    html += `<div class="rline"><span class="desc">${r.tanggal} · ${r.tempat || r.kategori}</span><span class="amt out">-${fmtRp(r.nominal)}</span></div>`;
   }
   el.innerHTML = html;
 }
@@ -415,12 +439,10 @@ function renderTrendChart(data){
   const byMonth = {};
   data.forEach(r => {
     const m = (r.tanggal || '').slice(0,7) || 'N/A';
-    byMonth[m] = byMonth[m] || {masuk:0, keluar:0};
-    if(r.jenis === 'Masuk') byMonth[m].masuk += r.nominal; else byMonth[m].keluar += r.nominal;
+    byMonth[m] = (byMonth[m] || 0) + r.nominal;
   });
   const labels = Object.keys(byMonth).sort();
-  const masukArr = labels.map(l => byMonth[l].masuk);
-  const keluarArr = labels.map(l => byMonth[l].keluar);
+  const totalArr = labels.map(l => byMonth[l]);
 
   if(trendChart) trendChart.destroy();
   trendChart = new Chart(document.getElementById('trendChart'), {
@@ -428,8 +450,7 @@ function renderTrendChart(data){
     data: {
       labels,
       datasets: [
-        {label:'Masuk', data: masukArr, backgroundColor:'#4FAE79', borderRadius:5},
-        {label:'Keluar', data: keluarArr, backgroundColor:'#D4685C', borderRadius:5}
+        {label:'Pengeluaran', data: totalArr, backgroundColor:'#C9A227', borderRadius:5}
       ]
     },
     options: {
@@ -445,7 +466,7 @@ function renderTrendChart(data){
 
 function renderCategoryChart(data){
   const byCat = {};
-  data.filter(r=>r.jenis==='Keluar').forEach(r => { byCat[r.kategori] = (byCat[r.kategori]||0) + r.nominal; });
+  data.forEach(r => { byCat[r.kategori] = (byCat[r.kategori]||0) + r.nominal; });
   const labels = Object.keys(byCat);
   const values = Object.values(byCat);
   const palette = ['#C9A227','#4FAE79','#D4685C','#5C8FD4','#B279D4','#D4A85C'];
@@ -466,38 +487,37 @@ function renderCategoryChart(data){
   ).join('');
 }
 
-function renderInsights(data, masuk, keluar, saldo){
+function renderInsights(data, total, byVendor){
   const insights = [];
-  const savingsRate = masuk > 0 ? ((saldo/masuk)*100).toFixed(1) : 0;
-  insights.push(`<b>Rasio simpanan:</b> ${savingsRate}% dari pemasukan tersisa sebagai saldo.`);
 
   const byCat = {};
-  data.filter(r=>r.jenis==='Keluar').forEach(r => { byCat[r.kategori] = (byCat[r.kategori]||0) + r.nominal; });
+  data.forEach(r => { byCat[r.kategori] = (byCat[r.kategori]||0) + r.nominal; });
   const topCat = Object.entries(byCat).sort((a,b)=>b[1]-a[1])[0];
   if(topCat){
-    const pct = keluar > 0 ? ((topCat[1]/keluar)*100).toFixed(0) : 0;
+    const pct = total > 0 ? ((topCat[1]/total)*100).toFixed(0) : 0;
     insights.push(`<b>Kategori terbesar:</b> "${topCat[0]}" menyerap ${pct}% dari total pengeluaran.`);
   }
 
-  if(saldo < 0){
-    insights.push(`<b>Perhatian:</b> pengeluaran melebihi pemasukan pada periode ini.`);
-  } else {
-    insights.push(`<b>Status:</b> arus kas positif, saldo bertambah ${fmtRp(saldo)}.`);
+  const topVendor = Object.entries(byVendor).sort((a,b)=>b[1]-a[1])[0];
+  if(topVendor){
+    const count = data.filter(r => (r.tempat||'Tidak diketahui') === topVendor[0]).length;
+    insights.push(`<b>Tempat belanja favorit:</b> "${topVendor[0]}" — ${count}x transaksi, total ${fmtRp(topVendor[1])}.`);
   }
 
-  const avgTx = data.length ? (keluar / data.filter(r=>r.jenis==='Keluar').length || 0) : 0;
-  insights.push(`<b>Rata-rata transaksi keluar:</b> ${fmtRp(avgTx)} per transaksi.`);
+  const biggest = data.slice().sort((a,b)=>b.nominal-a.nominal)[0];
+  if(biggest){
+    insights.push(`<b>Transaksi terbesar:</b> ${fmtRp(biggest.nominal)} di ${biggest.tempat || 'tempat tidak diketahui'}.`);
+  }
+
+  const avgTx = data.length ? total / data.length : 0;
+  insights.push(`<b>Rata-rata per transaksi:</b> ${fmtRp(avgTx)}.`);
 
   document.getElementById('insightList').innerHTML = insights.map(i => `<div class="insight">${i}</div>`).join('');
 
-  let narrative;
-  if(saldo < 0){
-    narrative = `Pengeluaran saat ini lebih besar dari pemasukan. Coba tinjau kategori "${topCat?topCat[0]:'terbesar'}" karena menyumbang porsi terbesar dari total belanja. Pertimbangkan menunda pengeluaran non-esensial hingga arus kas kembali positif.`;
-  } else if(savingsRate < 15){
-    narrative = `Arus kas masih positif, namun rasio simpanan tergolong tipis (${savingsRate}%). Menyisihkan sebagian pemasukan sebagai dana cadangan akan membuat kondisi keuangan lebih tahan terhadap bulan-bulan sepi.`;
-  } else {
-    narrative = `Kondisi keuangan sehat dengan rasio simpanan ${savingsRate}%. Pertahankan pola ini, dan pertimbangkan mengalokasikan sebagian saldo untuk pengembangan usaha atau investasi.`;
-  }
+  const vendorCount = Object.keys(byVendor).length;
+  const narrative = topCat
+    ? `Pengeluaran paling banyak tersedot ke kategori "${topCat[0]}"${topVendor ? `, dengan "${topVendor[0]}" sebagai tempat belanja paling sering dikunjungi` : ''}. Tercatat ${vendorCount} tempat belanja berbeda sejauh ini — pantau terus supaya pengeluaran tetap terkendali dan sesuai anggaran.`
+    : `Belum cukup data untuk dianalisis. Kirim voice note atau foto struk agar analisis pengeluaran bisa mulai terlihat di sini.`;
   document.getElementById('narrativeText').textContent = narrative;
 }
 
