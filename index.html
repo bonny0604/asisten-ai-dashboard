@@ -46,7 +46,7 @@
   .brand p{margin:2px 0 0;font-size:12.5px;color:var(--muted);}
   .status-row{display:flex;align-items:center;gap:12px;}
   .pill{display:flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--border);padding:7px 13px;border-radius:999px;font-size:12.5px;color:var(--muted);}
-  .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);}
+  .dot{width:11px;height:11px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);}
   .dot.off{background:var(--red);box-shadow:0 0 8px var(--red);}
   .btn{background:var(--panel3);border:1px solid var(--border);color:var(--text);padding:9px 16px;border-radius:9px;font-size:13px;cursor:pointer;font-family:inherit;transition:.15s;}
   .btn:hover{border-color:var(--brass);}
@@ -154,7 +154,7 @@
       </div>
     </div>
     <div class="status-row">
-      <div class="pill"><span class="dot off" id="statusDot"></span><span id="statusText">Belum terhubung</span></div>
+      <div class="pill"><span class="dot off" id="statusDot"></span><span id="statusText" style="display:none;">Belum terhubung</span></div>
       <button class="btn" id="toggleConfig">Masuk</button>
       <button class="btn primary" id="refreshBtn">Segarkan</button>
     </div>
@@ -239,7 +239,7 @@
 <script>
 // TODO: ganti dengan URL webhook n8n kamu sendiri (tanpa trailing slash), contoh:
 // 'https://n8n-anda.app/webhook/finance-api'
-const API_BASE = 'https://vola.app.n8n.cloud/webhook/finance-api';
+const API_BASE = 'https://ISI-URL-WEBHOOK-N8N-ANDA/webhook/finance-api';
 
 let trendChart, categoryChart;
 const fmtRp = n => 'Rp ' + Math.round(n).toLocaleString('id-ID');
@@ -328,6 +328,10 @@ async function fetchData(){
     renderAll(rows);
     dot.className = 'dot';
     statusText.textContent = `Terhubung — ${session.phone} (${rows.length} transaksi)`;
+  }catch(err){
+    console.error(err);
+    dot.className = 'dot off';
+    statusText.textContent = 'Gagal memuat dari server. Cek API_BASE & koneksi.';
   }
 }
 
