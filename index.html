@@ -328,10 +328,6 @@ async function fetchData(){
     renderAll(rows);
     dot.className = 'dot';
     statusText.textContent = `Terhubung — ${session.phone} (${rows.length} transaksi)`;
-  }catch(err){
-    console.error(err);
-    dot.className = 'dot off';
-    statusText.textContent = 'Gagal memuat dari server. Cek API_BASE & koneksi.';
   }
 }
 
